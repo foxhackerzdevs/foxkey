@@ -1,0 +1,24 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foxkey"
+version = "0.1.0"
+description = "Secure, dependency-light TOTP 2FA manager with zero footguns."
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+dependencies = [
+    "cryptography>=42.0.0",
+]
+
+[project.scripts]
+foxkey = "foxkey:main"
+
+[project.urls]
+"Source" = "https://github.com/foxhackerzdevs/foxkey"
+
+[tool.setuptools]
+py-modules = ["foxkey", "cli"]
+packages = ["core"]
