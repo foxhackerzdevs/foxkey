@@ -12,6 +12,8 @@ import binascii
 from core.storage import Vault
 from core.totp import generate_totp
 
+VERSION = "0.2.0"  # keep in sync with pyproject.toml's [project].version
+
 def sanitize_and_validate_secret(secret_input: str) -> dict:
     """Returns {'secret': str, 'algorithm': str, 'digits': int, 'period': int}."""
     cleaned = secret_input.strip()
@@ -84,13 +86,17 @@ def draw_progress_bar(remaining_seconds: int, total_steps: int = 30, bar_width: 
 
 def main():
     parser = argparse.ArgumentParser(prog="foxkey", description="Secure terminal 2FA manager.")
+    parser.add_argument("--version", action="version", version=f"foxkey {VERSION}")
     subparsers = parser.add_subparsers(dest="cmd", required=True)
 
     subparsers.add_parser("list", help="List all vault service names.")
     
     add_p = subparsers.add_parser("add", help="Add a new 2FA service credential.")
     add_p.add_argument("name", help="Account or provider tracking name.")
-    add_p.add_argument("secret", help="Base32 seed or full otpauth:// URI.")
+    add_p.add_argument("secret", nargs="?", default=None,
+                        help="Base32 seed or full otpauth:// URI. Omit to be prompted "
+                             "instead (recommended -- passing it directly leaks the "
+                             "2FA secret into shell history and `ps`, same as a password would).")
     add_p.add_argument("--algorithm", choices=["SHA1", "SHA256", "SHA512"],
                         help="Override HMAC algorithm (default: SHA1, or value from otpauth URI).")
     add_p.add_argument("--digits", type=int,
@@ -116,8 +122,11 @@ def main():
     args = parser.parse_args()
 
     if args.cmd == "add":
+        secret_input = args.secret
+        if not secret_input:
+            secret_input = getpass.getpass("Secret (Base32 seed or otpauth:// URI): ")
         try:
-            totp_config = sanitize_and_validate_secret(args.secret)
+            totp_config = sanitize_and_validate_secret(secret_input)
         except ValueError as err:
             print(f"Validation Error: {err}", file=sys.stderr)
             sys.exit(1)
@@ -197,13 +206,17 @@ def main():
                 print("Aborted: current vault left unchanged.")
                 sys.exit(0)
         try:
-            vault.import_backup(Path(args.file), password)
+            vault.import_backup(Path(args.file), password, password)
         except ValueError:
             # Backup may be encrypted under a different password than the
             # current vault (e.g. disaster recovery, or a stale backup).
+            # Note: the vault is still re-saved under `password` (the
+            # current/live master password), not backup_password -- so
+            # importing an old backup never silently changes your master
+            # password to match it.
             backup_password = getpass.getpass("Backup Master Password: ")
             try:
-                vault.import_backup(Path(args.file), backup_password)
+                vault.import_backup(Path(args.file), backup_password, password)
             except (FileNotFoundError, ValueError) as err:
                 print(f"Error: {err}", file=sys.stderr)
                 sys.exit(1)

@@ -69,17 +69,28 @@ class Vault:
         shutil.copy2(VAULT_PATH, backup_path)
         print(f"✅ Vault exported to: {backup_path}")
 
-    def import_backup(self, backup_path: Path, master_password: str):
-        """Import backup and re-encrypt under current (or new) password."""
+    def import_backup(self, backup_path: Path, backup_password: str, save_password: str):
+        """
+        Import entries from a backup and re-encrypt the live vault under
+        save_password -- the vault's actual current master password.
+
+        backup_password and save_password are intentionally separate: a
+        backup made before a password change (or restored during disaster
+        recovery) may be encrypted under a different password than the
+        live vault. Re-encrypting under backup_password unconditionally
+        would silently change the vault's master password to whatever
+        the backup happened to use. Always saving under save_password
+        keeps that a deliberate, explicit action instead.
+        """
         if not backup_path.exists():
             raise FileNotFoundError(f"Backup not found: {backup_path}")
 
         temp = Vault()
-        success = temp.load(master_password, path=backup_path)
+        success = temp.load(backup_password, path=backup_path)
 
         if not success:
             raise ValueError("Invalid master password for this backup.")
 
         self.entries = temp.entries
-        self.save(master_password)
+        self.save(save_password)
         print(f"✅ Successfully imported from {backup_path}")
